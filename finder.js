@@ -80,6 +80,14 @@ function findTreasureKeys(file, callback) {
 }
 
 function setResultBox(type, text, isCode) {
+  var resultSpinner = document.getElementById("result-spinner");
+  if (type == "process") {
+    type = "primary";
+    resultSpinner.style.display = "inline-block";
+  } else {
+    resultSpinner.style.display = "none";
+  }
+
   var resultBox = document.getElementById("result");
   resultBox.classList = "alert alert-" + type;
   if (isCode) {
@@ -87,7 +95,9 @@ function setResultBox(type, text, isCode) {
   }
 
   resultBox.style.display = "block";
-  resultBox.innerText = text;
+
+  var resultText = document.getElementById("result-text");
+  resultText.innerText = text;
 }
 
 function toHexString(byteArray) {
@@ -96,7 +106,7 @@ function toHexString(byteArray) {
   }).join("");
 }
 
-function decodeCipherContext(data) {
+function decodeCipherContext(data, offset) {
   var resultText = "";
 
   var dv = new DataView(data.buffer);
@@ -117,7 +127,33 @@ function decodeCipherContext(data) {
   resultText += "\n";
   resultText += "raw:        " + toHexString(data) + "\n";
 
-  return resultText;
+  let isNull = data.every(function (byte) {
+    return byte === 0;
+  });
+
+  if (cipher === 0x1 && keylen === 0x10) {
+    setResultBox(
+      "success",
+      "Found decryption keys at 0x" + offset.toString(16) + ":\n" + resultText,
+      true
+    );
+  } else if (isNull) {
+    setResultBox(
+      "warning",
+      "Key offset was found (0x" +
+        offset.toString(16) +
+        "), but the key data is zeroed out!\n\nThis usually means that the memory dump was made before the character select screen.\nIf you believe this is a mistake, please report it to cohae."
+    );
+  } else {
+    setResultBox(
+      "danger",
+      "Key offset was found (0x" +
+        offset.toString(16) +
+        "), but data doesn't seem valid\n" +
+        resultText,
+      true
+    );
+  }
 }
 
 function dropHandler(ev) {
@@ -134,7 +170,7 @@ function dropHandler(ev) {
     var file = ev.dataTransfer.items[0].getAsFile();
 
     setResultBox(
-      "primary",
+      "process",
       "Searching file, please wait\n(this may take a while depending on the file size)"
     );
     findTreasureKeys(file, function (cipherContext, data) {
@@ -145,8 +181,7 @@ function dropHandler(ev) {
       }
 
       if (data) {
-        let resultText = decodeCipherContext(data);
-        setResultBox("success", "Found decryption keys:\n" + resultText, true);
+        decodeCipherContext(data, cipherContext);
         console.log(data);
       }
     });
@@ -156,3 +191,7 @@ function dropHandler(ev) {
 function dragOverHandler(ev) {
   ev.preventDefault();
 }
+
+onload = function () {
+  setResultBox("primary", "Waiting for file...", false);
+};

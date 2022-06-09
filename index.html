@@ -33,8 +33,11 @@
       </div>
     </div>
     <div class="d-flex justify-content-center mt-3">
-      <div class="alert alert-primary" id="result" role="alert" style="max-width: 64rem; overflow-wrap: break-word;">
-        Waiting for file...
+      <div class="alert alert-primary align-middle d-flex align-items-center" id="result" role="alert" style="max-width: 64rem; overflow-wrap: break-word;">
+        <div class="spinner-border text-dark me-3" role="status" id="result-spinner">
+          <span class="visually-hidden">Loading...</span>
+        </div>
+        <span id="result-text">Waiting for file...</span>
       </div>
     </div>
   </body>
