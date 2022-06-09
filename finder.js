@@ -1,5 +1,9 @@
-const SEARCH_STRING = "GSFARM35011";
-const STRING_OFFSET = 0x01890b39;
+// const SEARCH_STRING = "GSFARM35011";
+const SEARCH_STRING = [
+  0xff, 0x9f, 0x4c, 0x6b, 0xa7, 0x07, 0x0d, 0xf8, 0x90, 0x89, 0x90, 0xfa, 0xc9,
+  0xcd, 0xd0, 0x8c,
+];
+const STRING_OFFSET = 0x01b95150;
 const CIPHERCONTEXT_ADDR = 0x01b951b0;
 
 const CIPHERCONTEXT_ADDR_RELATIVE = CIPHERCONTEXT_ADDR - STRING_OFFSET;
@@ -17,7 +21,8 @@ function findStringInBlock(block, searchString) {
   for (var i = 0; i < block.length - searchString.length; i++) {
     for (var j = 0; j < searchString.length; j++) {
       let byte1 = block[i + j];
-      let byte2 = searchString.charCodeAt(j);
+      let byte2 = searchString[j];
+      // let byte2 = searchString.charCodeAt(j);
       if (byte1 != byte2) {
         break;
       }
