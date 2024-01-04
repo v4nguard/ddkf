@@ -1,21 +1,31 @@
 // const SEARCH_STRING = "GSFARM35011";
-const SEARCH_STRING = [
+const SEARCH_STRING_PS3 = [
   0xff, 0x9f, 0x4c, 0x6b, 0xa7, 0x07, 0x0d, 0xf8, 0x90, 0x89, 0x90, 0xfa, 0xc9,
   0xcd, 0xd0, 0x8c,
 ];
-const STRING_OFFSET = 0x01b95150;
-const CIPHERCONTEXT_ADDR = 0x01b951b0;
+const STRING_OFFSET_PS3 = 0x01b95150;
+const CIPHERCONTEXT_ADDR_PS3 = 0x01b951b0;
+const CIPHERCONTEXT_ADDR_RELATIVE_PS3 = CIPHERCONTEXT_ADDR_PS3 - STRING_OFFSET_PS3;
 
-const CIPHERCONTEXT_ADDR_RELATIVE = CIPHERCONTEXT_ADDR - STRING_OFFSET;
+const SEARCH_STRING_X360 = [
+  // Offset 0x00000430 to 0x000004BB
+  0x40, 0x89, 0x99, 0x9A, 0x40, 0x89, 0x99, 0x9A, 0x40, 0x89, 0x99, 0x9A,
+  0x40, 0x89, 0x99, 0x9A, 0x40, 0x89, 0x99, 0x9A, 0x40, 0x89, 0x99, 0x9A,
+  0x40, 0x89, 0x99, 0x9A, 0x40, 0x89, 0x99, 0x9A, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x40, 0xAA, 0xC4, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10
+];
+
+const CIPHERCONTEXT_ADDR_RELATIVE_X360 = 128;
 
 const SEARCH_CHUNK_SIZE = 0x10000;
-
-function findCipherContext(reader, baseStringAddr) {
-  var reader = new FileReader();
-  reader.seek(baseStringAddr + CIPHERCONTEXT_ADDR_RELATIVE);
-
-  var cipherContext = reader.read(92);
-}
 
 function findStringInBlock(block, searchString) {
   for (var i = 0; i < block.length - searchString.length; i++) {
@@ -40,16 +50,32 @@ function findTreasureKeys(file, callback) {
   var offset = 0;
   var fileSize = file.size;
 
+  var platform = document.querySelector('input[name="platform"]:checked').value
+
   var reader = new FileReader();
   reader.onload = function (e) {
     var data = new Uint8Array(e.target.result);
 
-    let findRes = findStringInBlock(data, SEARCH_STRING.slice(0, 10));
-    if (findRes !== -1) {
-      console.log("Found treasure keys at offset: " + (offset + findRes));
-      let cipherContextAddr = offset + findRes + CIPHERCONTEXT_ADDR_RELATIVE;
-      readCipherContext(cipherContextAddr);
-      return;
+    if (platform == "ps3") {
+      console.log("Using PS3 search string")
+      let findRes = findStringInBlock(data, SEARCH_STRING_PS3.slice(0, 10));
+      if (findRes !== -1) {
+        console.log("Found treasure keys at offset: " + (offset + findRes));
+        let cipherContextAddr = offset + findRes + CIPHERCONTEXT_ADDR_RELATIVE_PS3;
+        readCipherContext(cipherContextAddr);
+        return;
+      }
+    } else if (platform == "x360") {
+      console.log("Using X360 search string")
+      let findRes = findStringInBlock(data, SEARCH_STRING_X360.slice(0));
+      if (findRes !== -1) {
+        console.log("Found treasure keys at offset: " + (offset + findRes));
+        let cipherContextAddr = offset + findRes + CIPHERCONTEXT_ADDR_RELATIVE_X360;
+        readCipherContext(cipherContextAddr);
+        return;
+      }
+    } else {
+      callback(-100);
     }
 
     offset += SEARCH_CHUNK_SIZE;
@@ -106,23 +132,39 @@ function toHexString(byteArray) {
   }).join("");
 }
 
-function decodeCipherContext(data, offset) {
-  var resultText = "";
-
+function parseCipherContext(data) {
   var dv = new DataView(data.buffer);
   let unk1 = dv.getUint32(0, false);
   let cipher = dv.getUint32(4, false);
   let keylen = dv.getUint32(8, false);
+
   let key = data.slice(12, 12 + keylen);
 
   let hmac_key = data.slice(0x24, 0x24 + 16);
 
-  resultText += "cbc_unk1:   " + unk1 + "\n";
-  resultText += "cbc_cipher: " + cipher + "\n";
-  resultText += "cbc_keylen: " + keylen + "\n";
-  resultText += "cbc_key:    " + toHexString(key) + "\n";
+  return {
+    unk1,
+    cipher,
+    keylen,
+    key,
+    hmac_key
+  }
+}
+
+function decodeCipherContext(data, offset) {
+  var resultText = "";
+
+  const platform = document.querySelector('input[name="platform"]:checked').value
+  const isXbox = platform == "x360";
+
+  const cipherContext = parseCipherContext(data);
+
+  resultText += "cbc_unk1:   " + "0x" + cipherContext.unk1.toString(16) + "\n";
+  resultText += "cbc_cipher: " + cipherContext.cipher + "\n";
+  resultText += "cbc_keylen: " + cipherContext.keylen + "\n";
   resultText += "\n";
-  resultText += "hmac_key:   " + toHexString(hmac_key) + "\n";
+  resultText += "cbc_key:    " + toHexString(cipherContext.key) + "\n";
+  resultText += "hmac_key:   " + toHexString(cipherContext.hmac_key) + "\n";
 
   resultText += "\n";
   resultText += "raw:        " + toHexString(data) + "\n";
@@ -131,7 +173,9 @@ function decodeCipherContext(data, offset) {
     return byte === 0;
   });
 
-  if (cipher === 0x1 && keylen === 0x10) {
+  const cipherValid = cipherContext.cipher === 0x1 || (isXbox && cipherContext.cipher === 0x0);
+
+  if (cipherValid && cipherContext.keylen === 0x10) {
     setResultBox(
       "success",
       "Found decryption keys at 0x" + offset.toString(16) + ":\n" + resultText,
@@ -141,16 +185,16 @@ function decodeCipherContext(data, offset) {
     setResultBox(
       "warning",
       "Key offset was found (0x" +
-        offset.toString(16) +
-        "), but the key data is zeroed out!\n\nThis usually means that the memory dump was made before the character select screen.\nIf you believe this is a mistake, please report it to cohae."
+      offset.toString(16) +
+      "), but the key data is zeroed out!\n\nThis usually means that the memory dump was made before the character select screen.\nIf you believe this is a mistake, please report it to cohae."
     );
   } else {
     setResultBox(
       "danger",
       "Key offset was found (0x" +
-        offset.toString(16) +
-        "), but data doesn't seem valid\n" +
-        resultText,
+      offset.toString(16) +
+      "), but data doesn't seem valid\n" +
+      resultText,
       true
     );
   }
@@ -177,6 +221,10 @@ function dropHandler(ev) {
       console.log(cipherContext);
       if (cipherContext === -1) {
         setResultBox("danger", "Could not find decryption keys");
+        return;
+      }
+      if (cipherContext === -100) {
+        setResultBox("danger", "Invalid platform");
         return;
       }
 
